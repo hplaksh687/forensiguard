@@ -2,7 +2,6 @@ streamlit
 opencv-python
 numpy
 pandas
-python-magic
 ffmpeg-python
 reportlab
 ollama
