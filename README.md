@@ -115,6 +115,14 @@ Forensiguard/
 
 ---
 
+## Live Demo
+
+Try the deployed application here:
+
+https://your-app-name.streamlit.app
+
+---
+
 ## 👥 Team
 
 Built for **CyberThon 26** — Cybersecurity Hackathon  
