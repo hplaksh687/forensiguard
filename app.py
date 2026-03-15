@@ -159,6 +159,15 @@ h1,h2,h3 { color: #c8e6c9 !important; font-family: 'Rajdhani', sans-serif !impor
 footer { display: none !important; }
 #MainMenu { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stHeader"] { display: none !important; }
+.block-container { padding-top: 0 !important; padding-bottom: 2rem !important; max-width: 100% !important; }
+[data-testid="stAppViewContainer"] > .main { padding-top: 0 !important; }
+[data-testid="stFileUploaderDropzone"] {
+    background: rgba(0,255,100,0.02) !important;
+    border: 1px dashed rgba(0,255,100,0.25) !important;
+    border-radius: 6px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -184,7 +193,8 @@ st.markdown("""
 # ── FILE UPLOAD ──
 uploaded_file = st.file_uploader(
     "Drop evidence files here — Supports MP4, AVI, MOV, WAV, MP3 formats",
-    type=["mp4", "avi", "mov", "wav", "mp3", "m4a"]
+    type=["mp4", "avi", "mov", "wav", "mp3", "m4a"],
+    label_visibility="collapsed"
 )
 
 if not uploaded_file:
@@ -558,133 +568,6 @@ with left_col:
 
                 st.caption("SPECTROGRAM")
                 st.plotly_chart(fig_spec, use_container_width=True, config={"displayModeBar": False})
-
-            st.divider()
-
-            # ── INTERACTIVE WAVEFORM PLAYER ──
-            st.markdown('<div class="fg-card-title">Interactive Waveform Player</div>', unsafe_allow_html=True)
-            st.components.v1.html("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:transparent;}
-.wv{font-family:'Share Tech Mono',monospace;background:#0a0e0a;border:1px solid rgba(0,255,100,0.15);border-radius:8px;padding:1.1rem;}
-.wv-label{font-size:10px;color:rgba(0,255,100,0.45);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;}
-.wv-canvas-wrap{position:relative;width:100%;height:90px;background:rgba(0,255,100,0.02);border:1px solid rgba(0,255,100,0.08);border-radius:4px;overflow:hidden;cursor:pointer;}
-canvas{display:block;width:100%;height:100%;}
-.wv-playhead{position:absolute;top:0;bottom:0;width:1.5px;background:rgba(0,255,100,0.7);pointer-events:none;left:0%;}
-.wv-controls{display:flex;gap:8px;align-items:center;margin-top:8px;}
-.wv-btn{background:transparent;border:1px solid rgba(0,255,100,0.3);color:rgba(0,255,100,0.8);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.1em;padding:4px 12px;border-radius:3px;cursor:pointer;text-transform:uppercase;}
-.wv-btn:hover{background:rgba(0,255,100,0.08);}
-.wv-seek{flex:1;height:3px;background:rgba(0,255,100,0.08);border-radius:2px;cursor:pointer;}
-.wv-seek-fill{height:100%;width:0%;background:rgba(0,255,100,0.5);border-radius:2px;pointer-events:none;}
-.wv-time{font-size:10px;color:rgba(0,255,100,0.45);min-width:72px;text-align:right;}
-.wv-upload{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100px;border:1px dashed rgba(0,255,100,0.18);border-radius:6px;cursor:pointer;gap:6px;}
-.wv-upload-text{font-size:10px;color:rgba(0,255,100,0.45);letter-spacing:0.1em;}
-input[type=file]{display:none;}
-.wv-events{margin-top:8px;}
-.wv-event{font-size:10px;color:rgba(200,230,200,0.7);background:rgba(255,61,61,0.05);border-left:2px solid rgba(255,61,61,0.45);padding:4px 10px;margin:2px 0;border-radius:0 3px 3px 0;display:flex;justify-content:space-between;}
-</style>
-<div class="wv">
-  <div id="uploadZone" class="wv-upload" onclick="document.getElementById('fi').click()">
-    <div style="font-size:22px;opacity:0.4;">&#9836;</div>
-    <div class="wv-upload-text">Upload audio file to visualize waveform</div>
-    <div style="font-size:9px;color:rgba(0,255,100,0.25);">WAV &nbsp;·&nbsp; MP3 &nbsp;·&nbsp; M4A</div>
-  </div>
-  <input type="file" id="fi" accept="audio/*">
-  <div id="viz" style="display:none;">
-    <div class="wv-label">Waveform</div>
-    <div class="wv-canvas-wrap" id="cwrap" onclick="seekClick(event)">
-      <canvas id="wc"></canvas>
-      <div class="wv-playhead" id="ph"></div>
-    </div>
-    <div class="wv-controls">
-      <button class="wv-btn" id="pb" onclick="togglePlay()">&#9654; Play</button>
-      <button class="wv-btn" onclick="stopAudio()">&#9632; Stop</button>
-      <div class="wv-seek" id="sb" onclick="seekClick2(event)"><div class="wv-seek-fill" id="sf"></div></div>
-      <span class="wv-time" id="td">0:00 / 0:00</span>
-    </div>
-    <div class="wv-events" id="ev"></div>
-  </div>
-</div>
-<script>
-let actx,buf,src,st=0,po=0,playing=false,raf,wd=[],dur=0,sr=0,splices=[];
-document.getElementById('fi').addEventListener('change',e=>{
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    actx=new(window.AudioContext||window.webkitAudioContext)();
-    actx.decodeAudioData(ev.target.result.slice(0),b=>{
-      buf=b;dur=b.duration;sr=b.sampleRate;
-      processAudio(b);
-      document.getElementById('uploadZone').style.display='none';
-      document.getElementById('viz').style.display='block';
-    });
-  };
-  r.readAsArrayBuffer(f);
-});
-function processAudio(b){
-  const ch=b.getChannelData(0),pts=800,step=Math.floor(ch.length/pts);
-  wd=[];
-  for(let i=0;i<pts;i++){let mx=0;for(let j=i*step;j<i*step+step&&j<ch.length;j++)mx=Math.max(mx,Math.abs(ch[j]));wd.push(mx);}
-  const fs=Math.floor(sr*0.1);const cents=[];
-  for(let i=0;i<ch.length-fs;i+=fs){
-    const seg=ch.slice(i,i+Math.min(256,fs));
-    let ws=0,s=0;const bn=sr/(seg.length*2);
-    for(let k=0;k<seg.length/2;k++){let r=0,im=0;for(let n=0;n<seg.length;n++){const a=2*Math.PI*k*n/seg.length;r+=seg[n]*Math.cos(a);im-=seg[n]*Math.sin(a);}const mg=Math.sqrt(r*r+im*im)/seg.length;ws+=mg*k*bn;s+=mg;}
-    cents.push(s===0?0:ws/s);
-  }
-  splices=[];const avg=cents.reduce((a,b)=>a+b,0)/cents.length,thr=avg*0.5;
-  for(let i=1;i<cents.length;i++){const d=Math.abs(cents[i]-cents[i-1]);if(d>thr)splices.push({t:(i*fs)/sr,sev:d>thr*2?'HIGH':d>thr*1.5?'MED':'LOW'});}
-  drawWave();renderEvents();
-}
-function drawWave(){
-  const cv=document.getElementById('wc'),dpr=window.devicePixelRatio||1;
-  const W=cv.offsetWidth,H=cv.offsetHeight;
-  cv.width=W*dpr;cv.height=H*dpr;
-  const ctx=cv.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
-  const mid=H/2;
-  ctx.strokeStyle='rgba(0,255,100,0.12)';ctx.lineWidth=0.5;
-  ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(W,mid);ctx.stroke();
-  splices.forEach(m=>{
-    const x=(m.t/dur)*W;
-    ctx.strokeStyle=m.sev==='HIGH'?'rgba(255,61,61,0.55)':m.sev==='MED'?'rgba(255,179,0,0.5)':'rgba(255,240,80,0.35)';
-    ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
-  });
-  ctx.beginPath();ctx.strokeStyle='rgba(0,255,100,0.85)';ctx.lineWidth=1;
-  for(let i=0;i<wd.length;i++){const x=(i/wd.length)*W,a=wd[i]*mid*0.88;i===0?ctx.moveTo(x,mid-a):ctx.lineTo(x,mid-a);}
-  ctx.stroke();
-  ctx.beginPath();ctx.strokeStyle='rgba(0,200,83,0.35)';ctx.lineWidth=1;
-  for(let i=0;i<wd.length;i++){const x=(i/wd.length)*W,a=wd[i]*mid*0.88;i===0?ctx.moveTo(x,mid+a):ctx.lineTo(x,mid+a);}
-  ctx.stroke();
-}
-function renderEvents(){
-  const p=document.getElementById('ev');
-  if(!splices.length){p.innerHTML='<div style="font-size:10px;color:rgba(0,255,100,0.35);">No splicing events detected.</div>';return;}
-  p.innerHTML='<div style="font-size:9px;color:rgba(0,255,100,0.4);letter-spacing:0.1em;margin-bottom:4px;">DETECTED EVENTS ('+splices.length+')</div>'+
-  splices.slice(0,6).map(m=>{
-    const mn=Math.floor(m.t/60),sc=Math.floor(m.t%60);
-    const c=m.sev==='HIGH'?'rgba(255,61,61,0.85)':m.sev==='MED'?'rgba(255,179,0,0.85)':'rgba(255,240,80,0.7)';
-    return'<div class="wv-event"><span>Spectral discontinuity — possible splice</span><span style="color:'+c+'">['+m.sev+'] '+mn+':'+String(sc).padStart(2,'0')+'</span></div>';
-  }).join('');
-}
-function fmt(t){const m=Math.floor(t/60),s=Math.floor(t%60);return m+':'+String(s).padStart(2,'0');}
-function togglePlay(){if(!buf)return;playing?pauseAudio():playAudio();}
-function playAudio(){
-  src=actx.createBufferSource();src.buffer=buf;src.connect(actx.destination);
-  src.start(0,po);st=actx.currentTime-po;playing=true;
-  document.getElementById('pb').innerHTML='&#9646;&#9646; Pause';
-  src.onended=()=>{if(playing){playing=false;po=0;document.getElementById('pb').innerHTML='&#9654; Play';}};
-  tick();
-}
-function pauseAudio(){src.stop();po=actx.currentTime-st;playing=false;document.getElementById('pb').innerHTML='&#9654; Play';cancelAnimationFrame(raf);}
-function stopAudio(){if(src&&playing)src.stop();playing=false;po=0;document.getElementById('pb').innerHTML='&#9654; Play';document.getElementById('ph').style.left='0%';document.getElementById('sf').style.width='0%';document.getElementById('td').textContent='0:00 / '+fmt(dur);cancelAnimationFrame(raf);}
-function seekClick(e){if(!buf)return;const r=document.getElementById('cwrap').getBoundingClientRect();const rt=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));po=rt*dur;if(playing){src.stop();playing=false;playAudio();}}
-function seekClick2(e){if(!buf)return;const r=document.getElementById('sb').getBoundingClientRect();const rt=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));po=rt*dur;if(playing){src.stop();playing=false;playAudio();}}
-function tick(){if(!playing)return;const el=actx.currentTime-st,pct=Math.min(100,(el/dur)*100);document.getElementById('ph').style.left=pct+'%';document.getElementById('sf').style.width=pct+'%';document.getElementById('td').textContent=fmt(el)+' / '+fmt(dur);if(el<dur)raf=requestAnimationFrame(tick);}
-</script>
-""", height=280)
-
     else:
 
         # Media Fingerprint
